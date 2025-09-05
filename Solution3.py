@@ -5,12 +5,14 @@ from scipy.optimize import differential_evolution
 
 import functions
 
+history = []
 uav_initial_pos = functions.UAV_POSITIONS['FY1']
 missile_initial_pos = functions.MISSILE_POSITIONS['M1']
 
 def objective_for_optimizer(params):
+    global history
     # 解包决策变量
-    angel_degrees, uav_speed, t_release_delay_1, t_release_delay_2, t_release_delay_3, t_free_fall_1, t_free_fall_2, t_free_fall_3 = params
+    angle_degrees, uav_speed, t_release_delay_1, t_release_delay_2, t_release_delay_3, t_free_fall_1, t_free_fall_2, t_free_fall_3 = params
 
     # 时间处理：依次累加得到绝对投放时刻
     t_release_1 = t_release_delay_1
@@ -18,9 +20,9 @@ def objective_for_optimizer(params):
     t_release_3 = t_release_2 + t_release_delay_3
 
     # 设置参数
-    params_1 = [angel_degrees, uav_speed, t_release_1, t_free_fall_1, 0.2]
-    params_2 = [angel_degrees, uav_speed, t_release_2, t_free_fall_2, 0.2]
-    params_3 = [angel_degrees, uav_speed, t_release_3, t_free_fall_3, 0.2]
+    params_1 = [angle_degrees, uav_speed, t_release_1, t_free_fall_1, 0.2]
+    params_2 = [angle_degrees, uav_speed, t_release_2, t_free_fall_2, 0.2]
+    params_3 = [angle_degrees, uav_speed, t_release_3, t_free_fall_3, 0.2]
 
     # 得到遮蔽区间
     res_1 = functions.calculate_obscuration_time(params_1, uav_initial_pos, missile_initial_pos)
@@ -36,19 +38,16 @@ def objective_for_optimizer(params):
     merged_intervals = functions.merge_intervals(all_intervals)
     total_mask_time = sum(end - start for start, end in merged_intervals)
 
-    # # --- Debug 输出 ---
-    # print("=" * 40)
-    # print(f"测试角度: {angel_degrees:.2f} 度, 速度: {uav_speed:.2f}")
-    # print(f"投放时间: {t_release_1:.2f}, {t_release_2:.2f}, {t_release_3:.2f}")
-    # print(f"单枚遮蔽时长: {-res_1[0]:.2f}, {-res_2[0]:.2f}, {-res_3[0]:.2f}")
-    # print("所有区间:", all_intervals)
-    # print("合并区间:", merged_intervals)
-    # print(f"总遮蔽时长: {total_mask_time:.2f}")
-    # print("=" * 40)
+    # 单个烟雾弹遮蔽时长
+    time1 = -res_1[0]
+    time2 = -res_2[0]
+    time3 = -res_3[0]
+
+    # 记录日志
+    history.append([total_mask_time, time1, time2, time3])
 
     # 返回目标函数值
     return -total_mask_time
-
 
 # --- 运行智能优化算法 ---
 if __name__ == '__main__':
@@ -143,3 +142,6 @@ if __name__ == '__main__':
         print(f"    绝对起爆时间: {info['t_drop'] + info['t_fuse']:.4f} s")
         print(f"    投放点: ({info['p_drop'][0]:.2f}, {info['p_drop'][1]:.2f}, {info['p_drop'][2]:.2f})")
         print(f"    起爆点: ({info['p_det'][0]:.2f}, {info['p_det'][1]:.2f}, {info['p_det'][2]:.2f})")
+
+    history_arr = np.array(history)
+    print(history_arr[-1])
