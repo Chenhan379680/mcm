@@ -33,9 +33,9 @@ def calculate_missile_positon(missile_initial_pos, t):
     return missile_initial_pos + missile_speed * u_m * t
 
 # 计算云团中心坐标
-def calculate_cloud_center(uav_initial_pos, angel_degrees, uav_speed, t_release_delay, t_free_fall, t):
-    angel_radians = np.radians(angel_degrees)
-    uav_velocity = np.array([cos(angel_radians) * uav_speed, sin(angel_radians) * uav_speed, 0.0])
+def calculate_cloud_center(uav_initial_pos, angle_degrees, uav_speed, t_release_delay, t_free_fall, t):
+    angle_radians = np.radians(angle_degrees)
+    uav_velocity = np.array([cos(angle_radians) * uav_speed, sin(angle_radians) * uav_speed, 0.0])
     release_point = uav_initial_pos + uav_velocity * t_release_delay
     explode_point = release_point + uav_velocity * t_free_fall + [0.0, 0.0, -0.5 * g * t_free_fall**2]
     dt = t - t_release_delay - t_free_fall
@@ -79,7 +79,7 @@ def calculate_projection_key_points(missile_initial_pos, t):
 # 计算遮蔽时长
 def calculate_obscuration_time(params, uav_initial_pos, missile_initial_pos):
     # 1. 参数列表
-    angel_degrees, uav_speed, t_release_delay, t_free_fall, precise = params
+    angle_degrees, uav_speed, t_release_delay, t_free_fall, precise = params
     t_detonate_abs = t_release_delay + t_free_fall
 
     # 2. 模拟和计算遮蔽时长
@@ -97,7 +97,7 @@ def calculate_obscuration_time(params, uav_initial_pos, missile_initial_pos):
     max_distances_to_los = np.zeros_like(times)
 
     for i, t in enumerate(times):
-        cloud_center = calculate_cloud_center(uav_initial_pos, angel_degrees, uav_speed, t_release_delay, t_free_fall, t)
+        cloud_center = calculate_cloud_center(uav_initial_pos, angle_degrees, uav_speed, t_release_delay, t_free_fall, t)
         missile_positon = calculate_missile_positon(missile_initial_pos, t)
         projection_key_points = calculate_projection_key_points(missile_positon, t)
 
