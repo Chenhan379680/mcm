@@ -104,13 +104,13 @@ if __name__ == '__main__':
 
     # 计算分别的遮蔽时间
     time1_neg, _, _, _ = functions.calculate_obscuration_time(
-        [flight_angle_deg, uav_speed, t_d1, t_f1, 0.1], uav_initial_pos, missile_initial_pos
+        [flight_angle_deg, uav_speed, t_d1, t_f1, 0.001], uav_initial_pos, missile_initial_pos
     )
     time2_neg, _, _, _ = functions.calculate_obscuration_time(
-        [flight_angle_deg, uav_speed, t_d2, t_f2, 0.1], uav_initial_pos, missile_initial_pos
+        [flight_angle_deg, uav_speed, t_d2, t_f2, 0.001], uav_initial_pos, missile_initial_pos
     )
     time3_neg, _, _, _ = functions.calculate_obscuration_time(
-        [flight_angle_deg, uav_speed, t_d3, t_f3, 0.1], uav_initial_pos, missile_initial_pos
+        [flight_angle_deg, uav_speed, t_d3, t_f3, 0.001], uav_initial_pos, missile_initial_pos
     )
 
     print(f"  - Bomb 1 Individual Obscuration Time: {-time1_neg:.4f} s")
