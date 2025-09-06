@@ -18,7 +18,6 @@ missile_initial_pos = functions.MISSILE_POSITIONS['M1']
 
 # 计算遮蔽时间
 total_mask_time, mask_interval, max_distances_to_los, times = functions.calculate_obscuration_time(params, uav_initial_pos, missile_initial_pos)
-total_mask_time = -total_mask_time
 
 # 输出结果
 print(f"总有效遮蔽时间 = {total_mask_time:.3f} s")
