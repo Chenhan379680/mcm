@@ -15,7 +15,7 @@ missile_initial_pos = functions.MISSILE_POSITIONS['M1']
 # 重新包装目标函数
 def objective_for_optimizer(params):
     full_params = list(params) + [0.2] #调整精度
-    return functions.calculate_obscuration_time(full_params, uav_initial_pos, missile_initial_pos)[0]
+    return -functions.calculate_obscuration_time(full_params, uav_initial_pos, missile_initial_pos)[0]
 
 # --- 运行智能优化算法 ---
 if __name__ == '__main__':
