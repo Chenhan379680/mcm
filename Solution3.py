@@ -9,7 +9,7 @@ missile_initial_pos = functions.MISSILE_POSITIONS['M1']
 
 def objective_for_optimizer(params):
     # 解包决策变量
-    angle_degrees, uav_speed, t_release_delay_1, t_release_delay_2, t_release_delay_3, t_free_fallree_fall_1, t_free_fallree_fall_2, t_free_fallree_fall_3 = params
+    angle_degrees, uav_speed, t_release_delay_1, t_release_delay_2, t_release_delay_3, t_free_fall_1, t_free_fall_2, t_free_fall_3 = params
 
     # 时间处理：依次累加得到绝对投放时刻
     t_release_1 = t_release_delay_1
@@ -17,9 +17,9 @@ def objective_for_optimizer(params):
     t_release_3 = t_release_2 + t_release_delay_3
 
     # 设置参数
-    params_1 = [angle_degrees, uav_speed, t_release_1, t_free_fallree_fall_1, 0.2]
-    params_2 = [angle_degrees, uav_speed, t_release_2, t_free_fallree_fall_2, 0.2]
-    params_3 = [angle_degrees, uav_speed, t_release_3, t_free_fallree_fall_3, 0.2]
+    params_1 = [angle_degrees, uav_speed, t_release_1, t_free_fall_1, 0.2]
+    params_2 = [angle_degrees, uav_speed, t_release_2, t_free_fall_2, 0.2]
+    params_3 = [angle_degrees, uav_speed, t_release_3, t_free_fall_3, 0.2]
 
     # 得到遮蔽区间
     res_1 = functions.calculate_obscuration_time(params_1, uav_initial_pos, missile_initial_pos)
