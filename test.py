@@ -6,84 +6,32 @@ from scipy.optimize import differential_evolution
 
 import functions
 
+uav_initial_pos_3 = functions.UAV_POSITIONS['FY3']
+missile_initial_pos = functions.MISSILE_POSITIONS['M1']
+
+
 plt.rcParams['font.sans-serif'] = ['SimHei']
 plt.rcParams['axes.unicode_minus'] = False
 
-uav_initial_pos = functions.UAV_POSITIONS['FY3']
-missile_initial_pos = functions.MISSILE_POSITIONS['M1']
+t = functions.calculate_obscuration_time(params=[np.float64(74.69719556205483),
+                                                 np.float64(106.61334718035776),
+                                                 np.float64(29.318946358743553),
+                                                 np.float64(0.42651023296990787),
+                                                 0.2],
+                                         uav_initial_pos=uav_initial_pos_3,
+                                         missile_initial_pos=missile_initial_pos)[0]
 
-# 重新包装目标函数
-def objective_for_optimizer(params):
-    full_params = list(params) + [0.2] #调整精度
-    mask_time = functions.calculate_obscuration_time(full_params, uav_initial_pos, missile_initial_pos)[0]
-    if mask_time >= 0:  # 因为你返回的是负值形式
-        return np.inf  # 给极大惩罚，保证算法不会收敛到这里
-    return mask_time
 
-# --- 运行智能优化算法 ---
-if __name__ == '__main__':
-    bounds = [
-        (0.0, 360.0), # 角度范围
-        (70.0, 140.0), # 速度范围
-        (0, 100), # 投弹延迟
-        (0, 100) # 起爆延迟
-    ]
+angle_radians = np.radians(np.float64(74.69719556205483))
+uav_speed = np.float64(106.61334718035776)
+t_release = np.float64(29.318946358743553)
+t_free_fall = np.float64(0.42651023296990787)
 
-    print("开始运行差分进化算法进行优化...")
-    start_time = time.time()
+v_uav = np.array([uav_speed * np.cos(angle_radians), uav_speed * np.sin(angle_radians), 0])
+p_release = uav_initial_pos_3 + v_uav * t_release
+p_detonation = p_release + v_uav * t_free_fall + np.array([0, 0, -0.5 * functions.g * t_free_fall ** 2])
 
-    result = differential_evolution(
-        func=objective_for_optimizer,
-        bounds=bounds,
-        strategy='best1bin',
-        maxiter=1000,
-        popsize=50,
-        tol=0.001,
-        mutation=(0.5, 1),
-        recombination=0.7,
-        disp=False,
-        seed=42,
-        workers=-1
-    )
+print(t)
 
-    end_time = time.time()
-    print(f"\n优化完成，耗时: {end_time - start_time:.2f} 秒")
-
-    # --- 输出结果 ---
-    best_params = result.x
-    max_duration = -result.fun
-
-    print("\n--- 最优投放策略 ---")
-    print(f"最大有效遮蔽时长: {max_duration:.4f} 秒")
-    print("\n最优参数组合:")
-    print(f"  - 无人机飞行方向角: {best_params[0]:.4f} 度")
-    print(f"  - 无人机飞行速度:   {best_params[1]:.4f} m/s")
-    print(f"  - 烟幕弹投放时间:   {best_params[2]:.4f} 秒")
-    print(f"  - 烟幕弹起爆延迟:   {best_params[3]:.4f} 秒")
-
-    final_params_with_precision = list(best_params) + [0.1]
-    _, obscuration_intervals, _, _ = functions.calculate_obscuration_time(
-        final_params_with_precision,
-        uav_initial_pos,
-        missile_initial_pos
-    )
-
-    print("\nObscuration Interval(s) for the Optimal Strategy:")
-    if obscuration_intervals:
-        for i, (start, end) in enumerate(obscuration_intervals):
-            duration = end - start
-            print(f"  - Interval {i + 1}: from {start:.3f}s to {end:.3f}s (Duration: {duration:.3f}s)")
-    else:
-        print("  - No effective obscuration intervals were found for the optimal solution.")
-
-    flight_angle_rad = np.deg2rad(best_params[0])
-    uav_speed = best_params[1]
-    t_drop = best_params[2]
-    t_det_delay = best_params[3]
-    v_uav_best = np.array([uav_speed * np.cos(flight_angle_rad), uav_speed * np.sin(flight_angle_rad), 0])
-    p_drop_best = uav_initial_pos + v_uav_best * t_drop
-    p_detonate_best = p_drop_best + v_uav_best * t_det_delay + np.array([0, 0, -0.5 * functions.g * t_det_delay ** 2])
-
-    print("\n对应的策略点位:")
-    print(f"  - 烟幕弹投放点: ({p_drop_best[0]:.2f}, {p_drop_best[1]:.2f}, {p_drop_best[2]:.2f})")
-    print(f"  - 烟幕弹起爆点: ({p_detonate_best[0]:.2f}, {p_detonate_best[1]:.2f}, {p_detonate_best[2]:.2f})")
+print(p_release)
+print(p_detonation)
