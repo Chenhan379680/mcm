@@ -108,7 +108,7 @@ def calculate_obscuration_time(params, uav_initial_pos, missile_initial_pos):
 
     times = np.arange(t_start, t_end, time_step)
     if len(times) == 0:
-        return 0, []
+        return 0, [], None, None
 
     mask = np.zeros_like(times, dtype=bool)
     # 用于绘图，记录每个时间点上，云团到6条视线中最远的那条的距离
@@ -142,7 +142,7 @@ def calculate_obscuration_time(params, uav_initial_pos, missile_initial_pos):
     total_mask_time = np.sum(mask) * time_step
 
     # 计算遮挡区间
-    interval = []
+    interval = (None, None)
     if total_mask_time > 0:
         # 通过填充和差分找到区间的开始和结束索引
         padded_mask = np.concatenate(([False], mask, [False]))
@@ -164,7 +164,7 @@ def calculate_obscuration_time(params, uav_initial_pos, missile_initial_pos):
 def merge_intervals(intervals):
     valid_intervals = []
     for interval in intervals:
-        if interval:
+        if interval != (None, None):
             valid_intervals.append(interval)
 
     # 如果过滤后列表为空，直接返回空列表
@@ -183,4 +183,9 @@ def merge_intervals(intervals):
             merged.append((current_start, current_end))
 
     return merged
+
+def get_best_params(uav, missile):
+    uav_initial_positon = UAV_POSITIONS[uav]
+    missile_initial_positon = MISSILE_POSITIONS[missile]
+
 
