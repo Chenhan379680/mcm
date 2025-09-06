@@ -19,8 +19,6 @@ def safe_calculate(params, uav_pos, missile_pos, uav_name):
         if not np.isfinite(mask_time):
             print(f"[ERROR] {uav_name} 遮蔽时间为非有限值, params={params}")
             return 0, [], None, None
-        if mask_time > 0:
-            print(f"[WARN] {uav_name} 遮蔽时间 > 0, params={params}")
 
         return result
 
@@ -127,7 +125,7 @@ if __name__ == '__main__':
             f"  - 投弹点:    ({p_release[0]:.2f}, {p_release[1]:.2f}, {p_release[2]:.2f}) at {t_release:.4f} s")
         print(
             f"  - 引爆点: ({p_detonation[0]:.2f}, {p_detonation[1]:.2f}, {p_detonation[2]:.2f}) at {t_release + t_free_fall:.4f} s")
-        print(f"  - 单独的遮蔽时长: {-time_neg:.4f} s")
+        print(f"  - 单独的遮蔽时长: {time_neg:.4f} s")
 
     print("\n" + "=" * 30)
     print("最终遮蔽时间 (Problem 4)")
