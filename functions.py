@@ -85,8 +85,26 @@ def calculate_obscuration_time(params, uav_initial_pos, missile_initial_pos):
     # 2. 模拟和计算遮蔽时长
     time_step = precise  # 使用可变的的步长以平衡速度和精度
 
+    if time_step <= 0:
+        print(f"[ERROR] 非法步长 time_step={time_step}, params={params}")
+        return 0, [], None, None
+
     t_start = t_detonate_abs
     t_end = t_detonate_abs + cloud_effective_duration
+
+    # --- DEBUG 检查 ---
+    if not np.isfinite(t_start) or not np.isfinite(t_end) or not np.isfinite(time_step):
+        print(f"[ERROR] 非法时间参数: t_start={t_start}, t_end={t_end}, step={time_step}")
+        print(f"[ERROR] params={params}")
+        return 0, [], None, None
+
+    if time_step <= 0:
+        print(f"[ERROR] 步长非法: {time_step}, params={params}")
+        return 0, [], None, None
+
+    if t_end <= t_start:
+        print(f"[ERROR] 时间区间非法: t_start={t_start}, t_end={t_end}, params={params}")
+        return 0, [], None, None
 
     times = np.arange(t_start, t_end, time_step)
     if len(times) == 0:
@@ -140,7 +158,7 @@ def calculate_obscuration_time(params, uav_initial_pos, missile_initial_pos):
             interval = (start_time, end_time)
 
     #返回结果
-    return -total_mask_time, interval, max_distances_to_los, times
+    return total_mask_time, interval, max_distances_to_los, times
 
 # 辅助函数：用于合并一系列可能重叠的时间区间。
 def merge_intervals(intervals):
