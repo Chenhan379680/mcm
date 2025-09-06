@@ -61,14 +61,6 @@ if __name__ == '__main__':
     print(f"  - 烟幕弹投放时间:   {best_params[2]:.4f} 秒")
     print(f"  - 烟幕弹起爆延迟:   {best_params[3]:.4f} 秒")
 
-    flight_angle_rad = np.deg2rad(best_params[0])
-    uav_speed = best_params[1]
-    t_drop = best_params[2]
-    t_det_delay = best_params[3]
-    v_uav_best = np.array([uav_speed * np.cos(flight_angle_rad), uav_speed * np.sin(flight_angle_rad), 0])
-    p_drop_best = uav_initial_pos + v_uav_best * t_drop
-    p_detonate_best = p_drop_best + v_uav_best * t_det_delay + np.array([0, 0, -0.5 * functions.g * t_det_delay ** 2])
-
     final_params_with_precision = list(best_params) + [0.1]
     _, obscuration_intervals, _, _ = functions.calculate_obscuration_time(
         final_params_with_precision,
@@ -83,6 +75,14 @@ if __name__ == '__main__':
             print(f"  - Interval {i + 1}: from {start:.3f}s to {end:.3f}s (Duration: {duration:.3f}s)")
     else:
         print("  - No effective obscuration intervals were found for the optimal solution.")
+
+    flight_angle_rad = np.deg2rad(best_params[0])
+    uav_speed = best_params[1]
+    t_drop = best_params[2]
+    t_det_delay = best_params[3]
+    v_uav_best = np.array([uav_speed * np.cos(flight_angle_rad), uav_speed * np.sin(flight_angle_rad), 0])
+    p_drop_best = uav_initial_pos + v_uav_best * t_drop
+    p_detonate_best = p_drop_best + v_uav_best * t_det_delay + np.array([0, 0, -0.5 * functions.g * t_det_delay ** 2])
 
     print("\n对应的策略点位:")
     print(f"  - 烟幕弹投放点: ({p_drop_best[0]:.2f}, {p_drop_best[1]:.2f}, {p_drop_best[2]:.2f})")
