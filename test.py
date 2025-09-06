@@ -69,6 +69,21 @@ if __name__ == '__main__':
     p_drop_best = uav_initial_pos + v_uav_best * t_drop
     p_detonate_best = p_drop_best + v_uav_best * t_det_delay + np.array([0, 0, -0.5 * functions.g * t_det_delay ** 2])
 
+    final_params_with_precision = list(best_params) + [0.1]
+    _, obscuration_intervals, _, _ = functions.calculate_obscuration_time(
+        final_params_with_precision,
+        uav_initial_pos,
+        missile_initial_pos
+    )
+
+    print("\nObscuration Interval(s) for the Optimal Strategy:")
+    if obscuration_intervals:
+        for i, (start, end) in enumerate(obscuration_intervals):
+            duration = end - start
+            print(f"  - Interval {i + 1}: from {start:.3f}s to {end:.3f}s (Duration: {duration:.3f}s)")
+    else:
+        print("  - No effective obscuration intervals were found for the optimal solution.")
+
     print("\n对应的策略点位:")
     print(f"  - 烟幕弹投放点: ({p_drop_best[0]:.2f}, {p_drop_best[1]:.2f}, {p_drop_best[2]:.2f})")
     print(f"  - 烟幕弹起爆点: ({p_detonate_best[0]:.2f}, {p_detonate_best[1]:.2f}, {p_detonate_best[2]:.2f})")
