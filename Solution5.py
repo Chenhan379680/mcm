@@ -132,6 +132,7 @@ if __name__ == '__main__':
 
         initial_best_params = result_single.x
         print(f"  阶段 1 完成. 找到最优单弹策略参数。")
+        print(-result_single.fun)
 
     #     # --- 阶段 2: 三烟幕弹精细搜索，使用阶段1的结果来收窄搜索范围 ---
     #     print("  --- 阶段 2: 三烟幕弹精细搜索 ---")
