@@ -50,7 +50,7 @@ if __name__ == '__main__':
     best_params = result.x
     max_duration = -result.fun
 
-    print("\n--- 最优投放策略 ---")
+    print("\n--- 最优投放策略(第二问) ---")
     print(f"最大有效遮蔽时长: {max_duration:.4f} 秒")
     print("\n最优参数组合:")
     print(f"  - 无人机飞行方向角: {best_params[0]:.4f} 度")
