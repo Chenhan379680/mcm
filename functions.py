@@ -55,7 +55,7 @@ def point_to_segment_distance(P, A, B):
 
 # 计算特征点的坐标
 def calculate_projection_key_points(missile_initial_pos, t):
-    missile_positon = calculate_missile_positon(t, missile_initial_pos)
+    missile_positon = calculate_missile_positon(missile_initial_pos, t)
     p_bottom_center = np.array([0, 200, 0.0])
     p_top_center = np.array([0, 200, cylinder_height])
     vector_axis_to_missile_xy = missile_positon[:2] - p_bottom_center[:2]
