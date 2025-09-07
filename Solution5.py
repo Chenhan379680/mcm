@@ -68,7 +68,7 @@ def find_optimal_strategy(uav_key, missile_key, bounds, maxiter=300, popsize=40,
         func=lambda params: objective_for_optimizer(params, uav_initial_pos, missile_initial_pos),
         dimensions=skopt_dimensions,
         x0=[plausible_solution],
-        n_calls=maxiter,  # 总评估次数 (相当于DE的预算)
+        n_calls=maxiter,  # 总评估次数
         n_initial_points=popsize,  # 初始随机探索的点数
         acq_func='LCB',
         kappa=0.1,
@@ -152,11 +152,11 @@ if __name__ == '__main__':
     print("--- 开始进行手动验证 ---")
 
     # 推荐的、逻辑上可能产生非零解的参数
-    plausible_solution = [240, 132, 3, 1.0, 1.0, 11.56, 7.0, 7.0]
+    plausible_solution = [87, 138, 18, 1.0, 1.0, 2.894, 7.0, 7.0]
 
     # 获取初始位置
-    uav_pos = functions.UAV_POSITIONS['FY4']
-    missile_pos = functions.MISSILE_POSITIONS['M2']
+    uav_pos = functions.UAV_POSITIONS['FY3']
+    missile_pos = functions.MISSILE_POSITIONS['M3']
 
     # 直接调用目标函数进行测试
     objective_value = objective_for_optimizer(plausible_solution, uav_pos, missile_pos)
@@ -206,49 +206,49 @@ if __name__ == '__main__':
     # )
 
 
-    # bound3 = [                  #FY3 to M3
-    #     (50.5542, 190),     # angle
-    #     (70, 140),              # speed
-    #     (0.01, 5),            # t_d1
-    #     (1, 5),                # dt2
-    #     (1, 5),                # dt3
-    #     (0.01, 11.832),         # t_f1
-    #     (0.01, 11.832),         # t_f2
-    #     (0.01, 11.832)          # t_f3
-    #
-    #
-    #
-    #
-    #
-    #
-    # ]
-    #
-    # find_optimal_strategy(
-    #     uav_key='FY3',
-    #     missile_key='M3',
-    #     bounds=bound3,
-    #     maxiter=500,
-    #     popsize=40,
-    #     seed=None
-    # )
+    bound3 = [                  #FY3 to M3
+        (85, 90),     # angle
+        (135, 140),              # speed
+        (16, 20),            # t_d1
+        (1, 5),                # dt2
+        (1, 5),                # dt3
+        (2, 3.5),         # t_f1
+        (0.01, 11.832),         # t_f2
+        (0.01, 11.832)          # t_f3
 
 
-    bound4 = [                  #FY4 to M2
-        (237, 243),   # angle
-        (130, 135),              # speed
-        (1, 5),          # t_d1
-        (1, 10),                # dt2
-        (1, 10),                # dt3
-        (10, 13),         # t_f1
-        (1, 18.973),         # t_f2
-        (1, 18.973)          # t_f3
+
+
+
+
     ]
 
     find_optimal_strategy(
-        uav_key='FY4',
-        missile_key='M2',
-        bounds=bound4,
+        uav_key='FY3',
+        missile_key='M3',
+        bounds=bound3,
+        maxiter=500,
+        popsize=40,
+        seed=None
     )
+
+
+    # bound4 = [                  #FY4 to M2
+    #     (237, 243),   # angle
+    #     (130, 135),              # speed
+    #     (1, 5),          # t_d1
+    #     (1, 10),                # dt2
+    #     (1, 10),                # dt3
+    #     (10, 13),         # t_f1
+    #     (1, 18.973),         # t_f2
+    #     (1, 18.973)          # t_f3
+    # ]
+    #
+    # find_optimal_strategy(
+    #     uav_key='FY4',
+    #     missile_key='M2',
+    #     bounds=bound4,
+    # )
 
     # bound5 = [  # FY5 to M3
     #     (125, 135),  # angle
