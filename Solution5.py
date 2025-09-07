@@ -169,17 +169,40 @@ def report_results(uav_pos, params, duration):
     t_d2 = t_d1 + dt2
     t_d3 = t_d2 + dt3
 
-    release_point = functions.calculate_cloud_center(
+    release_point_1 = functions.calculate_cloud_center(
         uav_pos, angle, speed, t_d1, t_f1, t_d1
     )
-    explosion_point = functions.calculate_cloud_center(
+    explosion_point_1 = functions.calculate_cloud_center(
         uav_pos, angle, speed, t_d1, t_f1, t_d1 + t_f1
+    )
+    release_point_2 = functions.calculate_cloud_center(
+        uav_pos, angle, speed, t_d2, t_f2, t_d2
+    )
+    explosion_point_2 = functions.calculate_cloud_center(
+        uav_pos, angle, speed, t_d2, t_f2, t_d2 + t_f2
+    )
+    release_point_3 = functions.calculate_cloud_center(
+        uav_pos, angle, speed, t_d3, t_f3, t_d3
+    )
+    explosion_point_3 = functions.calculate_cloud_center(
+        uav_pos, angle, speed, t_d3, t_f3, t_d3 + t_f3
     )
 
     print("\n" + "-" * 50)
     print(f"无人机参数: 角度={angle:.3f}°, 速度={speed:.1f} m/s")
-    print(f"投放点坐标: {np.round(release_point, 3)}")
-    print(f"爆炸点坐标: {np.round(explosion_point, 3)}")
+    print(f"投放点坐标1: {np.round(release_point_1, 3)}")
+    print(f"爆炸点坐标1: {np.round(explosion_point_1, 3)}")
+    mask_time_1 = functions.calculate_obscuration_time([angle, speed, t_d1, t_f1, 0.2], uav_pos, missile_pos)[0]
+    print(f"遮蔽时间1: {mask_time_1}")
+    print(f"投放点坐标2: {np.round(release_point_2, 3)}")
+    print(f"爆炸点坐标2: {np.round(explosion_point_2, 3)}")
+    mask_time_2 = functions.calculate_obscuration_time([angle, speed, t_d2, t_f2, 0.2], uav_pos, missile_pos)[0]
+    print(f"遮蔽时间2: {mask_time_2}")
+    print(f"投放点坐标3: {np.round(release_point_3, 3)}")
+    print(f"爆炸点坐标3: {np.round(explosion_point_3, 3)}")
+    mask_time_3 = functions.calculate_obscuration_time([angle, speed, t_d3, t_f3, 0.2], uav_pos, missile_pos)[0]
+    print(f"遮蔽时间3: {mask_time_3}")
+
     print(f"烟幕遮蔽时间: {duration:.3f} s")
     print("-" * 50 + "\n")
 
@@ -236,8 +259,8 @@ if __name__ == '__main__':
             max_duration = -result_multi.fun
             best_params_multi = result_multi.x
 
-            print(f"总遮蔽时长 {max_duration:.3f} s")
-            print(best_params_multi)
+            # print(f"总遮蔽时长 {max_duration:.3f} s")
+            # print(best_params_multi)
 
             # 输出详细结果
             report_results(uav_pos, best_params_multi, max_duration)
