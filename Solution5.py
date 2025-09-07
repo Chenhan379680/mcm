@@ -1,305 +1,295 @@
 import time
 import numpy as np
-from scipy.optimize import differential_evolution
-import functions
-import multiprocessing
+# from scipy.optimize import differential_evolution # 不再需要DE
+from skopt import gp_minimize  # 导入贝叶斯优化器
+from skopt.space import Real  # 导入定义搜索空间的工具
+import functions  # 确保您的 functions.py 文件在同一个目录下
 
-# 定义不同无人机的搜索范围
-bounds_single = {
-    "FY1": [
-        (160, 200),    # angle
-        (70, 140),     # speed
-        (0.01, 10),    # t_d1
-        (0.01, 10)     # t_f1
-    ],
-    "FY2": [
-        (186.6597, 328.5280),   # angle
-        (70, 140),   # speed
-        (0.01, 10),  # t_d1
-        (0.01, 16.733)  # t_f1
-    ],
-    "FY3": [
-        (38.6161, 75.2986),   # angle
-        (70, 140),   # speed
-        (0.01, 100), # t_d1
-        (0.01, 11.832) # t_f1
-    ],
-    "FY4": [
-        (190.3138, 319.5953),   # angle
-        (70, 140),   # speed
-        (0.01, 56.25), # t_d1
-        (0.01, 18.973) # t_f1
-    ],
-    "FY5": [
-        (52.0360, 171.2473),   # angle
-        (70, 140),   # speed
-        (0.01, 43.75), # t_d1
-        (0.01, 16.124) # t_f1
-    ]
-}
 
-bounds_multi = {
-    "FY1": [
-        (170, 190),    # angle
-        (70, 140),     # speed
-        (0.01, 13.75), # t_d1
-        (1, 13.75),    # dt2
-        (1, 13.75),    # dt3
-        (0.01, 18.973),# t_f1
-        (0.01, 18.973),# t_f2
-        (0.01, 18.973) # t_f3
-    ],
-    "FY2": [
-        (186.6597, 328.5280),   # angle
-        (70, 140),   # speed
-        (0.01, 50),  # t_d1
-        (1, 10),     # dt2
-        (1, 10),     # dt3
-        (0.01, 16.733),# t_f1
-        (0.01, 16.733),# t_f2
-        (0.01, 16.733)# t_f3
-    ],
-    "FY3": [
-        (38.6161, 75.2986),   # angle
-        (70, 140),   # speed
-        (0.01, 100), # t_d1
-        (1, 10),     # dt2
-        (1, 10),     # dt3
-        (0.01, 11.832),# t_f1
-        (0.01, 11.832),# t_f2
-        (0.01, 11.832)# t_f3
-    ],
-    "FY4": [
-        (190.3138, 319.5953),   # angle
-        (70, 140),   # speed
-        (0.01, 56.25), # t_d1
-        (1, 10),     # dt2
-        (1, 10),     # dt3
-        (0.01, 18.973),# t_f1
-        (0.01, 18.973),# t_f2
-        (0.01, 18.973)# t_f3
-    ],
-    "FY5": [
-        (52.0360, 171.2473),   # angle
-        (70, 140),   # speed
-        (0.01, 43.75), # t_d1
-        (1, 10),     # dt2
-        (1, 10),     # dt3
-        (0.01, 16.124),# t_f1
-        (0.01, 16.124),# t_f2
-        (0.01, 16.124)# t_f3
-    ]
-}
+# --- 1. 修改目标函数 ---
+# 移除了针对DE的 random.uniform() 惩罚。
+# 当没有遮蔽时，直接返回0。贝叶斯优化会把这里当作一个平坦区域来学习。
+def objective_for_optimizer(params, uav_pos, missile_pos):
+    # 解包决策变量
+    angle_degrees, uav_speed, t_release_delay_1, t_release_delay_2, t_release_delay_3, t_free_fall_1, t_free_fall_2, t_free_fall_3 = params
 
-# --- 目标函数1：用于第一阶段单烟幕弹的粗略搜索 ---
-def objective_single_bomb(params, uav_pos, missile_pos, target_pos):
+    # 时间处理
+    t_release_1 = t_release_delay_1
+    t_release_2 = t_release_1 + t_release_delay_2
+    t_release_3 = t_release_2 + t_release_delay_3
+
+    # 设置参数
+    params_1 = [angle_degrees, uav_speed, t_release_1, t_free_fall_1, 0.2]
+    params_2 = [angle_degrees, uav_speed, t_release_2, t_free_fall_2, 0.2]
+    params_3 = [angle_degrees, uav_speed, t_release_3, t_free_fall_3, 0.2]
+
+    # 得到遮蔽区间
+    res_1 = functions.calculate_obscuration_time(params_1, uav_pos, missile_pos)
+    res_2 = functions.calculate_obscuration_time(params_2, uav_pos, missile_pos)
+    res_3 = functions.calculate_obscuration_time(params_3, uav_pos, missile_pos)
+
+    # 处理遮蔽区间
+    all_intervals = [res_1[1], res_2[1], res_3[1]]
+    merged_intervals = functions.merge_intervals(all_intervals)
+    total_mask_time = sum(end - start for start, end in merged_intervals if start is not None)
+
+    # 返回目标函数值
+    if total_mask_time > 0.0:
+        # 我们的目标是最大化遮蔽时间, 而gp_minimize是最小化工具, 所以返回负值
+        return -total_mask_time
+    else:
+        # 对于无效解（遮蔽时间为0），直接返回0即可
+        return 0.0
+
+
+# --- 2. 修改主函数以使用贝叶斯优化 ---
+def find_optimal_strategy(uav_key, missile_key, bounds, maxiter=300, popsize=40, seed=None):
+    print("\n" + "#" * 50)
+    print(f"开始为 无人机 '{uav_key}' 对抗 导弹 '{missile_key}' 进行策略优化")
+    print("#" * 50)
+
     try:
-        if np.isnan(params).any():
-            print(f"[DEBUG][WARN] 优化器传入了nan值: {params}")
-            return 1e12
+        uav_initial_pos = functions.UAV_POSITIONS[uav_key]
+        missile_initial_pos = functions.MISSILE_POSITIONS[missile_key]  # 确保这里的key是正确的
+    except KeyError as e:
+        print(f"错误: 无法找到指定的key: {e}。请检查 functions.py 中的定义。")
+        return
 
-        full_params = list(params) + [0.2]  # Angle, Speed, Release, Fuse, Precision
+    # --- 3. 将 bounds 格式转换为 scikit-optimize 所需的格式 ---
+    # 这样您就不需要修改 if __name__ == '__main__': 中的 bounds 定义了
+    skopt_dimensions = [Real(low, high, name=f'p{i}') for i, (low, high) in enumerate(bounds)]
 
-        total_time_neg, intervals, _, times = functions.calculate_obscuration_time(
-            full_params, uav_pos, missile_pos
-        )
+    print(f"开始运行贝叶斯优化 (总评估次数={maxiter}, 初始探索点数={popsize})...")
+    start_time = time.time()
 
-        if total_time_neg > 0:
-            return -float(total_time_neg)
-
-        min_dists_to_line = []
-        if isinstance(times, np.ndarray) and len(times) > 0:
-            for t in times[::max(1, len(times) // 20)]:
-                cloud_center = functions.calculate_cloud_center(
-                    uav_pos, full_params[0], full_params[1],
-                    full_params[2], full_params[3], t
-                )
-                missile_p = functions.calculate_missile_positon(missile_pos, t)
-                d, _ = functions.point_to_segment_distance(
-                    np.array(cloud_center),
-                    np.array(missile_p),
-                    np.array(target_pos)
-                )
-                min_dists_to_line.append(d)
-
-        guide_val = min(min_dists_to_line) if min_dists_to_line else 1e3
-        return guide_val * 0.01
-
-    except Exception as e:
-        print("\n" + "=" * 20 + " [DEBUG][CRASH] " + "=" * 20)
-        print(f"函数 objective_single_bomb 发生意外错误。")
-        print(f"  - 错误类型: {type(e).__name__}")
-        print(f"  - 错误信息: {e}")
-        print(f"  - 导致错误的参数 (params): {np.round(params, 4)}")
-        print("=" * 55 + "\n")
-        return 1e12
-
-# --- 目标函数2：用于第二阶段三烟幕弹的精细搜索 ---
-def objective_multi_bomb(params, uav_pos, missile_pos):
-    try:
-        (angle, speed, t_d1, dt2, dt3, t_f1, t_f2, t_f3) = params
-        t_d2 = t_d1 + dt2
-        t_d3 = t_d2 + dt3
-        precision = 0.2
-
-        p1 = [angle, speed, t_d1, t_f1, precision]
-        p2 = [angle, speed, t_d2, t_f2, precision]
-        p3 = [angle, speed, t_d3, t_f3, precision]
-
-        _, i1, _, _ = functions.calculate_obscuration_time(p1, uav_pos, missile_pos)
-        _, i2, _, _ = functions.calculate_obscuration_time(p2, uav_pos, missile_pos)
-        _, i3, _, _ = functions.calculate_obscuration_time(p3, uav_pos, missile_pos)
-
-        all_intervals = []
-        if i1 != (None, None): all_intervals.append(i1)
-        if i2 != (None, None): all_intervals.append(i2)
-        if i3 != (None, None): all_intervals.append(i3)
-
-        merged = functions.merge_intervals(all_intervals)
-        total_duration = sum(end - start for start, end in merged)
-        return -float(total_duration)
-
-    except Exception as e:
-        print(f"[ERROR] objective_multi_bomb 出错: params={params}, err={e}")
-        return 1e6
-
-# --- 结果输出函数 ---
-def report_results(uav_pos, params, duration):
-    angle, speed, t_d1, dt2, dt3, t_f1, t_f2, t_f3 = params
-    t_d2 = t_d1 + dt2
-    t_d3 = t_d2 + dt3
-
-    release_point_1 = functions.calculate_cloud_center(
-        uav_pos, angle, speed, t_d1, t_f1, t_d1
-    )
-    explosion_point_1 = functions.calculate_cloud_center(
-        uav_pos, angle, speed, t_d1, t_f1, t_d1 + t_f1
-    )
-    release_point_2 = functions.calculate_cloud_center(
-        uav_pos, angle, speed, t_d2, t_f2, t_d2
-    )
-    explosion_point_2 = functions.calculate_cloud_center(
-        uav_pos, angle, speed, t_d2, t_f2, t_d2 + t_f2
-    )
-    release_point_3 = functions.calculate_cloud_center(
-        uav_pos, angle, speed, t_d3, t_f3, t_d3
-    )
-    explosion_point_3 = functions.calculate_cloud_center(
-        uav_pos, angle, speed, t_d3, t_f3, t_d3 + t_f3
+    # --- 4. 将 differential_evolution 替换为 gp_minimize ---
+    # 我们使用一个lambda函数来包装目标函数，以便传入固定的 uav_pos 和 missile_pos
+    result = gp_minimize(
+        func=lambda params: objective_for_optimizer(params, uav_initial_pos, missile_initial_pos),
+        dimensions=skopt_dimensions,
+        x0=[plausible_solution],
+        n_calls=maxiter,  # 总评估次数 (相当于DE的预算)
+        n_initial_points=popsize,  # 初始随机探索的点数
+        acq_func='LCB',
+        kappa=0.1,
+        random_state=seed,  # 随机种子
+        verbose=True  # 设置为True可以在运行时看到每一步的进展
     )
 
-    print("\n" + "-" * 50)
-    print(f"无人机参数: 角度={angle:.3f}°, 速度={speed:.1f} m/s")
-    print(f"投放点坐标1: {np.round(release_point_1, 3)}")
-    print(f"爆炸点坐标1: {np.round(explosion_point_1, 3)}")
-    mask_time_1 = functions.calculate_obscuration_time([angle, speed, t_d1, t_f1, 0.2], uav_pos, missile_pos)[0]
-    print(f"遮蔽时间1: {mask_time_1}")
-    print(f"投放点坐标2: {np.round(release_point_2, 3)}")
-    print(f"爆炸点坐标2: {np.round(explosion_point_2, 3)}")
-    mask_time_2 = functions.calculate_obscuration_time([angle, speed, t_d2, t_f2, 0.2], uav_pos, missile_pos)[0]
-    print(f"遮蔽时间2: {mask_time_2}")
-    print(f"投放点坐标3: {np.round(release_point_3, 3)}")
-    print(f"爆炸点坐标3: {np.round(explosion_point_3, 3)}")
-    mask_time_3 = functions.calculate_obscuration_time([angle, speed, t_d3, t_f3, 0.2], uav_pos, missile_pos)[0]
-    print(f"遮蔽时间3: {mask_time_3}")
+    end_time = time.time()
+    print(f"\n优化完成，耗时: {end_time - start_time:.2f} 秒")
 
-    print(f"烟幕遮蔽时间: {duration:.3f} s")
-    print("-" * 50 + "\n")
+    # --- 5. 输出结果部分几乎不需要修改 ---
+    # gp_minimize返回的结果对象与DE的非常相似 (result.x, result.fun)
+    best_params = result.x
 
-# --- 主执行程序 ---
+    # 检查result.fun是否是一个有效的数值
+    if result.fun is not None and np.isfinite(result.fun):
+        max_duration = -result.fun
+        print(f"最大总有效遮蔽时长: {max_duration:.4f} 秒")
+    else:
+        print("优化未能找到有效的非零解。")
+        max_duration = 0
+
+    # 解析最优参数
+    angle_degrees, uav_speed, t_release_delay_1, t_release_delay_2, t_release_delay_3, t_free_fall_1, t_free_fall_2, t_free_fall_3 = best_params
+
+    # ... (后续所有的结果分析和打印代码与您之前的版本完全相同，无需改动) ...
+    # ... (为了简洁，这里省略了和之前版本完全一样的结果输出代码) ...
+    t_release_1 = t_release_delay_1
+    t_release_2 = t_release_1 + t_release_delay_2
+    t_release_3 = t_release_2 + t_release_delay_3
+    print("\n--- 无人机飞行策略 ---")
+    print(f"  - 飞行方向角: {angle_degrees:.4f} 度")
+    print(f"  - 飞行速度:   {uav_speed:.4f} m/s")
+    params_1 = [angle_degrees, uav_speed, t_release_1, t_free_fall_1, 0.2]
+    params_2 = [angle_degrees, uav_speed, t_release_2, t_free_fall_2, 0.2]
+    params_3 = [angle_degrees, uav_speed, t_release_3, t_free_fall_3, 0.2]
+    res_1 = functions.calculate_obscuration_time(params_1, uav_initial_pos, missile_initial_pos)
+    res_2 = functions.calculate_obscuration_time(params_2, uav_initial_pos, missile_initial_pos)
+    res_3 = functions.calculate_obscuration_time(params_3, uav_initial_pos, missile_initial_pos)
+    interval_1 = res_1[1]
+    interval_2 = res_2[1]
+    interval_3 = res_3[1]
+    duration_1 = interval_1[1] - interval_1[0] if interval_1 and interval_1[0] is not None else 0
+    duration_2 = interval_2[1] - interval_2[0] if interval_2 and interval_2[0] is not None else 0
+    duration_3 = interval_3[1] - interval_3[0] if interval_3 and interval_3[0] is not None else 0
+    print("\n--- 单独遮蔽效果分析 ---")
+    if duration_1 > 0:
+        print(f"  - 烟雾弹1单独遮蔽时长: {duration_1:.4f} s, 时间区间: [{interval_1[0]:.2f}, {interval_1[1]:.2f}]")
+    if duration_2 > 0:
+        print(f"  - 烟雾弹2单独遮蔽时长: {duration_2:.4f} s, 时间区间: [{interval_2[0]:.2f}, {interval_2[1]:.2f}]")
+    if duration_3 > 0:
+        print(f"  - 烟雾弹3单独遮蔽时长: {duration_3:.4f} s, 时间区间: [{interval_3[0]:.2f}, {interval_3[1]:.2f}]")
+    flight_angle_rad = np.deg2rad(angle_degrees)
+    v_uav_best = np.array([uav_speed * np.cos(flight_angle_rad), uav_speed * np.sin(flight_angle_rad), 0])
+    p_d1 = uav_initial_pos + v_uav_best * t_release_1
+    p_d2 = uav_initial_pos + v_uav_best * t_release_2
+    p_d3 = uav_initial_pos + v_uav_best * t_release_3
+    p_det1 = p_d1 + v_uav_best * t_free_fall_1 + np.array([0, 0, -0.5 * functions.g * t_free_fall_1 ** 2])
+    p_det2 = p_d2 + v_uav_best * t_free_fall_2 + np.array([0, 0, -0.5 * functions.g * t_free_fall_2 ** 2])
+    p_det3 = p_d3 + v_uav_best * t_free_fall_3 + np.array([0, 0, -0.5 * functions.g * t_free_fall_3 ** 2])
+    bombs_info = [
+        {'id': 1, 't_release': t_release_1, 't_free_fall': t_free_fall_1, 'p_drop': p_d1, 'p_det': p_det1},
+        {'id': 2, 't_release': t_release_2, 't_free_fall': t_free_fall_2, 'p_drop': p_d2, 'p_det': p_det2},
+        {'id': 3, 't_release': t_release_3, 't_free_fall': t_free_fall_3, 'p_drop': p_d3, 'p_det': p_det3},
+    ]
+    print("\n--- 烟幕弹投放策略详情 ---")
+    for info in bombs_info:
+        print(f"\n  [烟幕弹 {info['id']}]")
+        print(f"    投放时间: {info['t_release']:.4f} s")
+        print(f"    引信时间: {info['t_free_fall']:.4f} s")
+        print(f"    绝对起爆时间: {info['t_release'] + info['t_free_fall']:.4f} s")
+        print(f"    投放点: ({info['p_drop'][0]:.4f}, {info['p_drop'][1]:.4f}, {info['p_drop'][2]:.4f})")
+        print(f"    起爆点: ({info['p_det'][0]:.4f}, {info['p_det'][1]:.4f}, {info['p_det'][2]:.4f})")
+
+    print("#" * 50 + "\n")
+    return best_params, max_duration
+
+
+# --- 主程序入口: 在这里定义并运行你的不同场景 ---
 if __name__ == '__main__':
-    multiprocessing.set_start_method("spawn", force=True)
-    TARGET_UAV = 'FY2'
-    TARGET_MISSILE = None
-    UAV_LIST = ['FY1', 'FY2', 'FY3', 'FY4', 'FY5']
-    MISSILES_TO_INTERCEPT = ['M1', 'M2', 'M3']
+    print("--- 开始进行手动验证 ---")
 
-    final_results = []
+    # 推荐的、逻辑上可能产生非零解的参数
+    plausible_solution = [240, 132, 3, 1.0, 1.0, 11.56, 7.0, 7.0]
 
-    for UAV_TO_ANALYZE in UAV_LIST:
-        if TARGET_UAV is not None and UAV_TO_ANALYZE != TARGET_UAV:
-            continue
-        bound_single = bounds_single[UAV_TO_ANALYZE]
-        bound_multi = bounds_multi[UAV_TO_ANALYZE]
-        uav_pos = functions.UAV_POSITIONS[UAV_TO_ANALYZE]
-        print(f"\n开始为无人机 {UAV_TO_ANALYZE} 执行多阶段优化...")
+    # 获取初始位置
+    uav_pos = functions.UAV_POSITIONS['FY4']
+    missile_pos = functions.MISSILE_POSITIONS['M2']
 
-        all_run_results = []
+    # 直接调用目标函数进行测试
+    objective_value = objective_for_optimizer(plausible_solution, uav_pos, missile_pos)
 
-        for missile_name in MISSILES_TO_INTERCEPT:
-            if TARGET_MISSILE is not None and missile_name != TARGET_MISSILE:
-                continue
-            missile_pos = functions.MISSILE_POSITIONS[missile_name]
-            print("\n" + "=" * 50)
-            print(f"当前优化目标: {UAV_TO_ANALYZE} vs {missile_name}")
+    if objective_value < 0:
+        print(f"✅ 验证成功！这组参数产生了 {-objective_value:.4f} 秒的有效遮蔽时间。")
+    else:
+        print(f"❌ 验证失败。这组参数的遮蔽时间为0。可能需要微调参数。")
 
-            # --- 阶段 1: 单烟幕弹粗略搜索 ---
-            result_single = differential_evolution(
-                func=objective_single_bomb,
-                args=(uav_pos, missile_pos, functions.true_target),
-                bounds=bound_single,
-                strategy='best1bin', maxiter=1000, popsize=50, tol=0.001,
-                mutation=(0.5, 1), recombination=0.7,
-                disp=False, workers=-1
-            )
-            initial_best_params = result_single.x
-            print(f"  阶段 1 完成, 单弹最大遮蔽时长: {-result_single.fun:.3f} s")
-            print(f"    初始参数: {np.round(initial_best_params, 4)}")
+    print("--- 手动验证结束 ---\n")
+    # bound1 = [  # FY1 to M1
+    #     (170, 190),  # angle
+    #     (70, 140),  # speed
+    #     (1, 8),  # t_d1
+    #     (1, 5),  # dt2
+    #     (1, 5),  # dt3
+    #     (1, 8),  # t_f1
+    #     (1, 8),  # t_f2
+    #     (1, 8)# t_f3
+    # ]
+    #
+    # # 运行场景一
+    # find_optimal_strategy(
+    #     uav_key='FY1',
+    #     missile_key='M1',
+    #     bounds=bound1,
+    # )
+    #
 
-            # --- 阶段 2: 三烟幕弹精细搜索 ---
-            result_multi = differential_evolution(
-                func=objective_multi_bomb,
-                args=(uav_pos, missile_pos),
-                bounds=bound_multi,
-                strategy='best1bin', maxiter=600, popsize=30, tol=0.01,
-                mutation=(0.5, 1), recombination=0.7,
-                disp=False, workers=-1
-            )
 
-            max_duration = -result_multi.fun
-            best_params_multi = result_multi.x
 
-            # print(f"总遮蔽时长 {max_duration:.3f} s")
-            # print(best_params_multi)
+    # bound2 = [  # FY2 to M2
+    #     (186.6581, 335.4666),  # angle
+    #     (70, 140),  # speed
+    #     (1, 8),  # t_d1
+    #     (1, 5),  # dt2
+    #     (1, 5),  # dt3
+    #     (1, 8),  # t_f1
+    #     (1, 8),  # t_f2
+    #     (1, 8)  # t_f3
+    # ]
+    #
+    # find_optimal_strategy(
+    #     uav_key='FY2',
+    #     missile_key='M2',
+    #     bounds=bound2,
+    # )
 
-            # 输出详细结果
-            report_results(uav_pos, best_params_multi, max_duration)
 
-            all_run_results.append({
-                'missile': missile_name,
-                'duration': max_duration,
-                'params': best_params_multi
-            })
+    # bound3 = [                  #FY3 to M3
+    #     (50.5542, 190),     # angle
+    #     (70, 140),              # speed
+    #     (0.01, 5),            # t_d1
+    #     (1, 5),                # dt2
+    #     (1, 5),                # dt3
+    #     (0.01, 11.832),         # t_f1
+    #     (0.01, 11.832),         # t_f2
+    #     (0.01, 11.832)          # t_f3
+    #
+    #
+    #
+    #
+    #
+    #
+    # ]
+    #
+    # find_optimal_strategy(
+    #     uav_key='FY3',
+    #     missile_key='M3',
+    #     bounds=bound3,
+    #     maxiter=500,
+    #     popsize=40,
+    #     seed=None
+    # )
 
-        # --- 阶段 3: 选出该无人机的最佳导弹 ---
-        if all_run_results:
-            best_overall_result = max(all_run_results, key=lambda x: x['duration'])
-            (angle, speed, t_d1, dt2, dt3, t_f1, t_f2, t_f3) = best_overall_result['params']
-            t_d2 = t_d1 + dt2
-            t_d3 = t_d2 + dt3
 
-            flight_params = {
-                'angle': angle,
-                'speed': speed,
-                't_d1': t_d1, 't_d2': t_d2, 't_d3': t_d3,
-                't_f1': t_f1, 't_f2': t_f2, 't_f3': t_f3
-            }
+    bound4 = [                  #FY4 to M2
+        (237, 243),   # angle
+        (130, 135),              # speed
+        (1, 5),          # t_d1
+        (1, 10),                # dt2
+        (1, 10),                # dt3
+        (10, 13),         # t_f1
+        (1, 18.973),         # t_f2
+        (1, 18.973)          # t_f3
+    ]
 
-            final_results.append({
-                'uav': UAV_TO_ANALYZE,
-                'missile': best_overall_result['missile'],
-                'duration': best_overall_result['duration'],
-                'flight_params': flight_params
-            })
+    find_optimal_strategy(
+        uav_key='FY4',
+        missile_key='M2',
+        bounds=bound4,
+    )
 
-            # 输出最佳导弹结果
-            report_results(uav_pos, best_overall_result['params'], best_overall_result['duration'])
+    # bound5 = [  # FY5 to M3
+    #     (125, 135),  # angle
+    #     (130, 135),  # speed
+    #     (10, 15),  # t_d1
+    #     (1, 10),  # dt2
+    #     (1, 10),  # dt3
+    #     (3, 4),  # t_f1
+    #     (0.01, 16.124),  # t_f2
+    #     (0.01, 16.124)  # t_f3
+    # ]
+    #
+    # find_optimal_strategy(
+    #     uav_key='FY5',
+    #     missile_key='M3',
+    #     bounds=bound5,
+    # )
 
-    # --- 打印所有 UAV–Missile 的最佳对应关系 ---
-    print("\n" + "#" * 60)
-    print("最终无人机–导弹对应关系:")
-    for res in final_results:
-        print(f"  UAV {res['uav']}  ->  Missile {res['missile']}  "
-              f"(遮蔽 {res['duration']:.3f} s)")
-        print("  飞行参数:", res['flight_params'])
-    print("#" * 60)
+    ##2-2
+    # 飞行速度: 138m / s
+    # 飞行方向: 280° (与x轴正方向夹角)
+    # 投放时间: 4s
+    # 起爆时间: 7.111111111111111s
+
+
+    ##3-3
+    # 飞行速度: 138 m / s
+    # 飞行方向: 87° (与x轴正方向夹角)
+    # 投放时间: 18.0 s
+    # 起爆时间: 20.894736842105264 s
+
+    ##4-2
+    ## 飞行方向: 240° (与x轴正方向夹角)
+    ## 飞行速度: 132 m/s
+    ## 投放时间: 3 s
+    # 起爆时间: 14.555555555555555 s
+
+
+
+    ##5-3
+    ##飞行方向: 131° (与x轴正方向夹角)
+    ##飞行速度: 132 m/s
+    ##投放时间: 12.5 s
+    ##起爆时间: 16.342105263157894 s
